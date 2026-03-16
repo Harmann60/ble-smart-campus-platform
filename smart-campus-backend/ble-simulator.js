@@ -1,35 +1,42 @@
 // ble-simulator.js
-const http = require('http');
+const TARGET_URL = 'http://localhost:5000/api/ble/telemetry';
 
-const SERVER_URL = 'http://localhost:5000/api/nfc/telemetry';
-
-const simulateScan = () => {
-    const payload = JSON.stringify({
-        gateway_id: "ESP32_ROOM_104",
-        beacons: [
-            { mac: "AA:BB:CC:11:22:33", student_name: "Jalaj Maheshwari", engagement_score: 88, rssi: -55 },
-            { mac: "AA:BB:CC:44:55:66", student_name: "Harman Singh", engagement_score: 92, rssi: -62 },
-            { mac: "AA:BB:CC:77:88:99", student_name: "Gauri", engagement_score: 95, rssi: -90 } // Weak signal, should be filtered out
-        ]
-    });
-
-    const options = {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(payload)
-        }
-    };
-
-    const req = http.request(SERVER_URL, options, (res) => {
-        console.log(`Simulated Ping Sent -> Server Response: ${res.statusCode}`);
-    });
-
-    req.on('error', (e) => console.error(`Error: ${e.message}`));
-    req.write(payload);
-    req.end();
+// These MAC addresses exactly match the ones we seeded in your database!
+const sampleData = {
+    gateway_id: "SIMULATOR_ESP32",
+    beacons: [
+        { mac: "AA:BB:CC:11:22:33", rssi: -60 }, // Jalaj Maheshwari
+        { mac: "AA:BB:CC:44:55:66", rssi: -65 }, // Harman Jassal
+        { mac: "AA:BB:CC:77:88:99", rssi: -55 }  // Gauri
+    ]
 };
 
-console.log("Starting BLE Hardware Simulator...");
-simulateScan();
-setInterval(simulateScan, 4000); // Ping every 4 seconds
+console.log("🚀 Starting BLE Hardware Simulator...");
+console.log(`📡 Sending data to: ${TARGET_URL}\n`);
+
+setInterval(async () => {
+    try {
+        // Randomize the RSSI (signal strength) slightly so the dashboard looks "alive"
+        const payload = {
+            gateway_id: sampleData.gateway_id,
+            beacons: sampleData.beacons.map(b => ({
+                mac: b.mac,
+                rssi: b.rssi + Math.floor(Math.random() * 10) - 5
+            }))
+        };
+
+        const response = await fetch(TARGET_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+            console.log("✅ Simulated Ping Sent -> Server Response: 200 OK");
+        } else {
+            console.log(`❌ Simulated Ping Sent -> Server Response: ${response.status}`);
+        }
+    } catch (error) {
+        console.error("⚠️ Connection Refused - Is the backend running?");
+    }
+}, 2000); // Sends a ping every 2 seconds

@@ -13,7 +13,7 @@ const Attendance = () => {
             if (!isPolling) return;
             try {
                 // Point this to your new backend endpoint
-                const res = await axios.get('http://localhost:5000/api/ble/live-radar');g
+                const res = await axios.get('http://localhost:5000/api/ble/live-radar');
                 setLiveStudents(res.data);
             } catch (err) {
                 console.error("Error fetching live data:", err);
