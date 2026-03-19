@@ -3,72 +3,122 @@ const router = express.Router();
 const User = require('../models/User');
 const AccessLog = require('../models/AccessLog');
 
-// In-Memory Store for Live Proximity Detection (Keeps the UI fast)
+// In-Memory Store for Live Proximity Detection
 let activeClassroom = {};
+
 
 // ---------------------------------------------------------
 // 1. IOT INGESTION ENDPOINT (ESP32 Gateway POSTs here)
 // ---------------------------------------------------------
 router.post('/telemetry', async (req, res) => {
+
     const { gateway_id, beacons } = req.body;
     const currentTime = Date.now();
 
-    if (!beacons || !Array.isArray(beacons)) {
+    if (!gateway_id || !Array.isArray(beacons)) {
         return res.status(400).json({ error: "Invalid payload format" });
     }
 
-    for (const beacon of beacons) {
-        if (beacon.rssi > -80) {
-            try {
-                const student = await User.findOne({ where: { ble_mac: beacon.mac } });
+    try {
 
-                if (student) {
-                    activeClassroom[beacon.mac] = {
-                        mac: beacon.mac,
-                        last_seen: currentTime,
-                        rssi: beacon.rssi,
-                        student_name: student.name,
-                        engagement_score: student.engagement_score
-                    };
-                }
-            } catch (err) {
-                console.error("Database query failed:", err);
+        for (const beacon of beacons) {
+
+            if (!beacon.student_id || beacon.rssi === undefined) {
+                console.log("Invalid beacon data:", beacon);
+                continue;
             }
+
+            console.log("Incoming beacon:", beacon);
+
+            // Ignore weak signals
+            if (beacon.rssi <= -80) continue;
+
+            // If student already active, just update timestamp + RSSI
+            if (activeClassroom[beacon.student_id]) {
+
+                activeClassroom[beacon.student_id].last_seen = currentTime;
+                activeClassroom[beacon.student_id].rssi = beacon.rssi;
+
+                continue;
+            }
+
+            // Otherwise lookup student
+            const student = await User.findOne({
+                where: { student_id: beacon.student_id }
+            });
+
+            if (!student) {
+                console.log("Unknown student ID:", beacon.student_id);
+                continue;
+            }
+
+            activeClassroom[beacon.student_id] = {
+                student_id: beacon.student_id,
+                last_seen: currentTime,
+                rssi: beacon.rssi,
+                student_name: student.name,
+                engagement_score: student.engagement_score
+            };
+
         }
+
+        res.json({
+            status: "success",
+            processed: beacons.length
+        });
+
+    } catch (err) {
+
+        console.error("Telemetry processing error:", err);
+
+        res.status(500).json({
+            error: "Internal server error"
+        });
+
     }
 
-    res.json({ status: "success", processed: beacons.length });
 });
+
 
 // ---------------------------------------------------------
 // 2. FRONTEND POLLING ENDPOINT (React GETs data from here)
 // ---------------------------------------------------------
 router.get('/live-radar', (req, res) => {
+
     const currentTime = Date.now();
     let liveStudents = [];
 
-    for (const mac in activeClassroom) {
-        const data = activeClassroom[mac];
+    for (const id in activeClassroom) {
 
-        if (currentTime - data.last_seen < 60000) {
+        const data = activeClassroom[id];
+
+        if (currentTime - data.last_seen < 10000) {
+
             liveStudents.push(data);
+
         } else {
-            delete activeClassroom[mac];
+
+            delete activeClassroom[id];
+
         }
     }
 
     res.json(liveStudents);
+
 });
 
+
 // ---------------------------------------------------------
-// 3. SEED DEMO DATA (Run ONCE from browser)
+// 3. SEED DEMO DATA
 // ---------------------------------------------------------
 router.get('/seed-demo-data', async (req, res) => {
+
     try {
-        const bcrypt = require('bcryptjs'); // Assumes you are using bcryptjs
+
+        const bcrypt = require('bcryptjs');
         const pass = await bcrypt.hash("password123", 10);
 
-        // 1. Create the Admin user for you to log in
+        // Admin
         await User.findOrCreate({
             where: { email: "admin@identa.com" },
             defaults: {
@@ -78,24 +128,44 @@ router.get('/seed-demo-data', async (req, res) => {
             }
         });
 
-        // 2. Create the Demo Students
-        await User.findOrCreate({
-            where: { ble_mac: "AA:BB:CC:11:22:33" },
-            defaults: { name: "Jalaj Maheshwari", role: "student", engagement_score: 88 }
-        });
-        await User.findOrCreate({
-            where: { ble_mac: "AA:BB:CC:44:55:66" },
-            defaults: { name: "Harman Jassal", role: "student", engagement_score: 92 } // 👈 Fixed your name!
-        });
-        await User.findOrCreate({
-            where: { ble_mac: "AA:BB:CC:77:88:99" },
-            defaults: { name: "Gauri", role: "student", engagement_score: 95 }
+        // Students
+        await User.upsert({
+            student_id: 1,
+            name: "Jalaj Maheshwari",
+            email: "jalaj@student.com",
+            password: pass,
+            role: "student",
+            engagement_score: 88
         });
 
-        res.send("✅ Database seeded! You can now log in with email: admin@identa.com | Password: password123");
+        await User.upsert({
+            student_id: 2,
+            name: "Harman Jassal",
+            email: "harman@student.com",
+            password: pass,
+            role: "student",
+            engagement_score: 92
+        });
+
+        await User.upsert({
+            student_id: 3,
+            name: "Gauri",
+            email: "gauri@student.com",
+            password: pass,
+            role: "student",
+            engagement_score: 95
+        });
+
+        res.send("✅ Database seeded! Login with admin@identa.com / password123");
+
     } catch (err) {
+
+        console.error("Seed error:", err);
+
         res.status(500).send("❌ Error seeding DB: " + err.message);
+
     }
+
 });
 
 module.exports = router;
