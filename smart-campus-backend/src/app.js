@@ -8,12 +8,16 @@ const User = require('./models/User');
 const AccessLog = require('./models/AccessLog');
 const Book = require('./models/Book');
 const LibraryTransaction = require('./models/LibraryTransaction');
+const Session = require('./models/Session');
+const AttendanceLog = require('./models/AttendanceLog');
 
 // --- 2. IMPORT ROUTES ---
 const authRoutes = require('./routes/authRoutes');
 const nfcRoutes = require('./routes/nfcRoutes');
 const libraryRoutes = require('./routes/libraryRoutes');
 const bleRoutes = require('./routes/bleRoutes');
+const sessionRoutes = require('./routes/sessionRoutes');
+const attendanceRoutes = require('./routes/attendanceRoutes');
 
 const app = express();
 
@@ -29,6 +33,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/nfc', nfcRoutes);
 app.use('/api/library', libraryRoutes);
 app.use('/api/ble', bleRoutes);
+app.use('/api/session', sessionRoutes);
+app.use('/api/attendance', attendanceRoutes);
 
 const PORT = process.env.PORT || 5000;
 
