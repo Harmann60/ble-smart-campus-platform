@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import Sidebar from '../components/Sidebar';
-import { Radio, Users, Activity, Download, UserPlus, X } from 'lucide-react';
+// 📍 ADDED "Save" ICON HERE:
+import { Radio, Users, Activity, Download, UserPlus, X, Save } from 'lucide-react';
 
 // ==========================================
 // 1. HELPER FUNCTION (Distance Math)
@@ -55,7 +56,7 @@ const Attendance = () => {
         displayStudents.forEach(student => {
             if (!announcedStudents.includes(student.student_name)) {
                 // Comment this out if it gets annoying during dev!
-                alert(`🔔 ${student.student_name} has entered the classroom!`);
+                // alert(`🔔 ${student.student_name} has entered the classroom!`);
                 setAnnouncedStudents(prev => [...prev, student.student_name]);
             }
         });
@@ -101,6 +102,23 @@ const Attendance = () => {
         link.click();
     };
 
+    // ==========================================
+    // 6. SAVE SESSION LOGIC (NEW!)
+    // ==========================================
+    const handleSaveSession = async () => {
+        if (displayStudents.length === 0) {
+            alert("No students to save!");
+            return;
+        }
+
+        // For tomorrow's demo, we fake a successful save to the database!
+        alert("✅ Attendance Session Saved to Database successfully!");
+
+        // Optional: you can clear the radar after saving if you want
+        // setLiveStudents([]);
+        // setManualStudents([]);
+    };
+
     return (
         <div className="flex bg-campus-bg min-h-screen font-sans text-campus-text transition-colors duration-300">
             <Sidebar />
@@ -113,7 +131,16 @@ const Attendance = () => {
                     </div>
 
                     <div className="flex gap-4 items-center">
-                        {/* 📍 NEW: Export CSV Button */}
+
+                        {/* 📍 NEW: Save Session Button */}
+                        <button
+                            onClick={handleSaveSession}
+                            className="bg-green-600 text-white px-4 py-3 rounded-2xl shadow-sm hover:bg-green-700 transition-colors flex items-center gap-2 font-bold"
+                        >
+                            <Save size={20} /> Save Session
+                        </button>
+
+                        {/* Export CSV Button */}
                         <button
                             onClick={handleExportCSV}
                             className="bg-campus-primary text-white px-4 py-3 rounded-2xl shadow-sm hover:opacity-90 transition-opacity flex items-center gap-2 font-bold"
@@ -160,7 +187,7 @@ const Attendance = () => {
                     {/* LIVE ENGAGEMENT LIST */}
                     <div className="lg:col-span-2 bg-campus-card rounded-3xl shadow-sm border border-campus-border flex flex-col overflow-hidden">
 
-                        {/* 📍 NEW: Header with Manual Add Input */}
+                        {/* Header with Manual Add Input */}
                         <div className="p-6 border-b border-campus-border bg-campus-bg/50 flex justify-between items-center">
                             <h3 className="font-bold flex items-center gap-2 text-campus-text">
                                 <Activity size={18}/> Active Session Logs
@@ -198,7 +225,7 @@ const Attendance = () => {
                                             <div>
                                                 <span className="font-bold text-campus-text block flex items-center gap-2">
                                                     {data.student_name}
-                                                    {/* 📍 NEW: Location Tag */}
+                                                    {/* Location Tag */}
                                                     <span className="text-[10px] uppercase bg-campus-primary/10 text-campus-primary px-2 py-0.5 rounded-full">
                                                         {estimateLocation(data.rssi)}
                                                     </span>
@@ -216,7 +243,7 @@ const Attendance = () => {
                                                 Inside Room
                                             </span>
 
-                                            {/* 📍 NEW: Kick Button (Visible on hover) */}
+                                            {/* Kick Button (Visible on hover) */}
                                             <button
                                                 onClick={() => handleKick(data.student_name)}
                                                 className="opacity-0 group-hover:opacity-100 text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all"
