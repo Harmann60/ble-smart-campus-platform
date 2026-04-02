@@ -1,6 +1,6 @@
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-// 📍 ADDED FileText icon here:
-import { LayoutDashboard, Coffee, BookOpen, CalendarDays, LogOut, History, FileText } from 'lucide-react';
+import { LayoutDashboard, Coffee, BookOpen, CalendarDays, LogOut, FileText } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 const Sidebar = () => {
@@ -10,10 +10,8 @@ const Sidebar = () => {
     const menu = [
         { name: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard size={20} /> },
         { name: 'Attendance', path: '/attendance', icon: <CalendarDays size={20} /> },
-        // 📍 ADDED ATTENDANCE LOGS HERE:
         { name: 'Attendance Logs', path: '/attendance-logs', icon: <FileText size={20} /> },
-        { name: 'Library', path: '/library', icon: <BookOpen size={20} /> },
-        { name: 'Library Logs', path: '/library-logs', icon: <History size={20} /> },
+        { name: 'Smart Library', path: '/library', icon: <BookOpen size={20} /> },
         { name: 'Smart Canteen', path: '/canteen', icon: <Coffee size={20} /> },
     ];
 
