@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import Sidebar from '../components/Sidebar';
-// 📍 ADDED "Save" ICON HERE:
 import { Radio, Users, Activity, Download, UserPlus, X, Save } from 'lucide-react';
 
 // ==========================================
@@ -103,7 +102,7 @@ const Attendance = () => {
     };
 
     // ==========================================
-    // 6. SAVE SESSION LOGIC (NEW!)
+    // 6. SAVE SESSION LOGIC (REAL LOCALSTORAGE SAVE)
     // ==========================================
     const handleSaveSession = async () => {
         if (displayStudents.length === 0) {
@@ -111,12 +110,27 @@ const Attendance = () => {
             return;
         }
 
-        // For tomorrow's demo, we fake a successful save to the database!
-        alert("✅ Attendance Session Saved to Database successfully!");
+        // 1. Create a dynamic log object based on right now
+        const newLog = {
+            id: Date.now(), // Unique ID
+            className: "Room 104 - Live Session",
+            date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            totalPresent: displayStudents.length,
+            students: displayStudents.map(student => ({
+                name: student.student_name,
+                rssi: student.rssi,
+                status: "Present"
+            }))
+        };
 
-        // Optional: you can clear the radar after saving if you want
-        // setLiveStudents([]);
-        // setManualStudents([]);
+        // 2. Fetch any previously saved logs from the browser memory
+        const existingLogs = JSON.parse(localStorage.getItem('campus_attendance_logs')) || [];
+
+        // 3. Save the new log at the top of the list!
+        localStorage.setItem('campus_attendance_logs', JSON.stringify([newLog, ...existingLogs]));
+
+        alert("✅ Session saved! Go check the Attendance Logs page.");
     };
 
     return (
@@ -132,7 +146,7 @@ const Attendance = () => {
 
                     <div className="flex gap-4 items-center">
 
-                        {/* 📍 NEW: Save Session Button */}
+                        {/* Save Session Button */}
                         <button
                             onClick={handleSaveSession}
                             className="bg-green-600 text-white px-4 py-3 rounded-2xl shadow-sm hover:bg-green-700 transition-colors flex items-center gap-2 font-bold"

@@ -6,13 +6,13 @@ const AttendanceLogs = () => {
     const [logs, setLogs] = useState([]);
     const [selectedLog, setSelectedLog] = useState(null); // Controls the popup modal
 
-    // Load mock data for the demo (Replace with axios.get later!)
+    // Load data from LocalStorage + Mock Data for the demo
     useEffect(() => {
         const mockDatabaseLogs = [
             {
                 id: 1,
                 className: "Room 104 - Computer Networks",
-                date: "26 March 2026",
+                date: "02 April 2026", // Updated date to match your demo timeline!
                 time: "10:00 AM - 11:00 AM",
                 totalPresent: 42,
                 students: [
@@ -24,7 +24,7 @@ const AttendanceLogs = () => {
             {
                 id: 2,
                 className: "Room 201 - IoT & Embedded Systems",
-                date: "25 March 2026",
+                date: "01 April 2026",
                 time: "02:00 PM - 04:00 PM",
                 totalPresent: 38,
                 students: [
@@ -33,7 +33,18 @@ const AttendanceLogs = () => {
                 ]
             }
         ];
-        setLogs(mockDatabaseLogs);
+
+        // 📍 Read the REAL data that we saved from the radar
+        const savedData = localStorage.getItem('campus_attendance_logs');
+        const savedLogs = savedData ? JSON.parse(savedData) : [];
+
+        if (savedLogs.length > 0) {
+            // If we have real saves, show them FIRST, then show the mock data
+            setLogs([...savedLogs, ...mockDatabaseLogs]);
+        } else {
+            // Otherwise, just show the mock data
+            setLogs(mockDatabaseLogs);
+        }
     }, []);
 
     return (
