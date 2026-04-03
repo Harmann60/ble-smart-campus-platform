@@ -1,275 +1,448 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Sidebar from '../components/Sidebar';
-import { Radio, Users, Activity, Download, UserPlus, X, Save } from 'lucide-react';
+import { Radio, Users, Activity, Save } from 'lucide-react';
+import CreateSession from '../components/CreateSession';
 
-// ==========================================
-// 1. HELPER FUNCTION (Distance Math)
-// ==========================================
-const estimateLocation = (rssi) => {
-    if (!rssi) return "Searching...";
-    if (rssi >= -60) return "Front Row (< 2m)";
-    if (rssi >= -80) return "Middle Row (2m - 5m)";
-    return "Back Row (> 5m)";
+const API_BASE = 'http://localhost:5000';
+
+const statusStyles = {
+    present: 'bg-green-100/80 border-green-200',
+    late: 'bg-yellow-100/80 border-yellow-200',
+    absent: 'bg-red-100/80 border-red-200'
 };
 
+const statusBadgeStyles = {
+    present: 'bg-green-600 text-white',
+    late: 'bg-yellow-500 text-white',
+    absent: 'bg-red-500 text-white'
+};
+
+const normalizeRoster = (rows) =>
+    rows.map((row) => ({
+        student_id: row.student_id,
+        prn: row.prn,
+        name: row.name,
+        status: row.status || 'absent',
+        comment: row.comment || '',
+        manual_override: row.manual_override || false
+    }));
+
+const isDetectedForRow = (row, liveStudent) => {
+    const liveIdRaw = String(liveStudent?.student_id ?? '').trim();
+    if (!liveIdRaw) {
+        return false;
+    }
+
+    const rowStudentId = String(row.student_id ?? '').trim();
+    const rowPrn = String(row.prn ?? '').trim();
+
+    if (liveIdRaw === rowStudentId || liveIdRaw === rowPrn) {
+        return true;
+    }
+
+    const liveIdNum = Number.parseInt(liveIdRaw, 10);
+    const rowStudentIdNum = Number.parseInt(rowStudentId, 10);
+    if (!Number.isNaN(liveIdNum) && !Number.isNaN(rowStudentIdNum) && liveIdNum === rowStudentIdNum) {
+        return true;
+    }
+
+    return rowPrn.endsWith(liveIdRaw);
+};
+
+const buildAttendancePayload = (rows) =>
+    rows.map((row) => ({
+        student_id: row.student_id,
+        status: row.status,
+        comment: row.comment
+    }));
+
 const Attendance = () => {
-    // Original States
+    const [session, setSession] = useState(null);
+    const [attendanceRows, setAttendanceRows] = useState([]);
     const [liveStudents, setLiveStudents] = useState([]);
-    const [isPolling, setIsPolling] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [isSavingSession, setIsSavingSession] = useState(false);
+    const [saveMessage, setSaveMessage] = useState('');
 
-    // New States for Demo Features
-    const [manualStudents, setManualStudents] = useState([]);
-    const [kickedStudents, setKickedStudents] = useState([]);
-    const [announcedStudents, setAnnouncedStudents] = useState([]);
-    const [manualName, setManualName] = useState("");
-
-    // Poll the Node.js backend every 3 seconds
     useEffect(() => {
-        const fetchLiveAttendance = async () => {
-            if (!isPolling) return;
+        if (!session) {
+            return undefined;
+        }
+
+        const fetchRoster = async () => {
             try {
-                const res = await axios.get('http://localhost:5000/api/ble/live-radar');
-                setLiveStudents(res.data);
-            } catch (err) {
-                console.error("Error fetching live data:", err);
+                const res = await axios.get(
+                    `${API_BASE}/api/attendance/session/${session.id}/students`
+                );
+                setAttendanceRows(normalizeRoster(res.data));
+            } catch (error) {
+                console.error('Failed to fetch roster', error);
             }
         };
 
-        fetchLiveAttendance();
-        const interval = setInterval(fetchLiveAttendance, 3000);
-        return () => clearInterval(interval);
-    }, [isPolling]);
+        fetchRoster();
+        return undefined;
+    }, [session]);
 
-    // ==========================================
-    // 2. DERIVED STATE (Combine Live & Manual, Hide Kicked)
-    // ==========================================
-    const displayStudents = [...liveStudents, ...manualStudents].filter(
-        student => !kickedStudents.includes(student.student_name)
-    );
-
-    // ==========================================
-    // 3. NEW STUDENT ALERT LOGIC
-    // ==========================================
     useEffect(() => {
-        displayStudents.forEach(student => {
-            if (!announcedStudents.includes(student.student_name)) {
-                // Comment this out if it gets annoying during dev!
-                // alert(`🔔 ${student.student_name} has entered the classroom!`);
-                setAnnouncedStudents(prev => [...prev, student.student_name]);
+        if (!session) {
+            return undefined;
+        }
+
+        setLiveStudents([]);
+
+        const fetchLiveStudents = async () => {
+            try {
+                const [attendanceRes, bleRes] = await Promise.allSettled([
+                    axios.get(`${API_BASE}/api/attendance/live`),
+                    axios.get(`${API_BASE}/api/ble/live-radar`)
+                ]);
+
+                const attendanceData =
+                    attendanceRes.status === 'fulfilled' && Array.isArray(attendanceRes.value?.data?.data)
+                        ? attendanceRes.value.data.data
+                        : [];
+
+                const bleData =
+                    bleRes.status === 'fulfilled' && Array.isArray(bleRes.value?.data)
+                        ? bleRes.value.data
+                        : [];
+
+                const mergedById = new Map();
+                [...attendanceData, ...bleData].forEach((student) => {
+                    const key = String(student?.student_id ?? '').trim();
+                    if (key) {
+                        mergedById.set(key, student);
+                    }
+                });
+
+                setLiveStudents(Array.from(mergedById.values()));
+            } catch (error) {
+                console.error('Failed to fetch live students', error);
             }
-        });
-    }, [displayStudents, announcedStudents]);
-
-    // ==========================================
-    // 4. MANUAL OVERRIDE & KICK LOGIC
-    // ==========================================
-    const handleManualAdd = () => {
-        if (manualName.trim() === "") return;
-        const newStudent = {
-            student_name: manualName,
-            rssi: -45, // Fake strong signal
-            engagement_score: 100 // Give them a perfect score
         };
-        setManualStudents(prev => [...prev, newStudent]);
-        setManualName("");
+
+        fetchLiveStudents();
+        const intervalId = setInterval(fetchLiveStudents, 2000);
+        return () => clearInterval(intervalId);
+    }, [session]);
+
+    useEffect(() => {
+        setAttendanceRows((prevRows) =>
+            prevRows.map((row) => {
+                if (row.manual_override) {
+                    return row;
+                }
+
+                const detected = liveStudents.some((student) => isDetectedForRow(row, student));
+                return {
+                    ...row,
+                    status: detected ? 'present' : 'absent'
+                };
+            })
+        );
+    }, [liveStudents]);
+
+    const updateRow = (studentId, updates) => {
+        setAttendanceRows((prevRows) =>
+            prevRows.map((row) =>
+                row.student_id === studentId ? { ...row, ...updates } : row
+            )
+        );
     };
 
-    const handleKick = (studentName) => {
-        setKickedStudents(prev => [...prev, studentName]);
-    };
-
-    // ==========================================
-    // 5. EXPORT TO CSV LOGIC
-    // ==========================================
-    const handleExportCSV = () => {
-        if (displayStudents.length === 0) {
-            alert("No students to export!");
-            return;
-        }
-        let csvContent = "data:text/csv;charset=utf-8,Student Name,Signal (RSSI),Estimated Location,Engagement Score,Timestamp\n";
-
-        displayStudents.forEach(student => {
-            const location = estimateLocation(student.rssi);
-            const time = new Date().toLocaleTimeString();
-            csvContent += `"${student.student_name}","${student.rssi}","${location}","${student.engagement_score}%","${time}"\n`;
+    const handleStatusChange = (studentId, status) => {
+        updateRow(studentId, {
+            status,
+            manual_override: true
         });
-
-        const link = document.createElement("a");
-        link.href = encodeURI(csvContent);
-        link.download = "Smart_Campus_Attendance_Log.csv";
-        link.click();
     };
 
-    // ==========================================
-    // 6. SAVE SESSION LOGIC (REAL LOCALSTORAGE SAVE)
-    // ==========================================
-    const handleSaveSession = async () => {
-        if (displayStudents.length === 0) {
-            alert("No students to save!");
-            return;
-        }
+    const handleCommentChange = (studentId, comment) => {
+        updateRow(studentId, { comment });
+    };
 
-        // 1. Create a dynamic log object based on right now
-        const newLog = {
-            id: Date.now(), // Unique ID
-            className: "Room 104 - Live Session",
-            date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
-            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-            totalPresent: displayStudents.length,
-            students: displayStudents.map(student => ({
-                name: student.student_name,
-                rssi: student.rssi,
-                status: "Present"
+    const markAll = (status) => {
+        setAttendanceRows((prevRows) =>
+            prevRows.map((row) => ({
+                ...row,
+                status,
+                manual_override: true
             }))
-        };
-
-        // 2. Fetch any previously saved logs from the browser memory
-        const existingLogs = JSON.parse(localStorage.getItem('campus_attendance_logs')) || [];
-
-        // 3. Save the new log at the top of the list!
-        localStorage.setItem('campus_attendance_logs', JSON.stringify([newLog, ...existingLogs]));
-
-        alert("✅ Session saved! Go check the Attendance Logs page.");
+        );
     };
+
+    const handleSaveAttendance = async () => {
+        if (!session) {
+            return;
+        }
+
+        try {
+            setIsSaving(true);
+            setSaveMessage('');
+
+            await axios.post(`${API_BASE}/api/attendance/save`, {
+                session_id: session.id,
+                attendance: buildAttendancePayload(attendanceRows)
+            });
+
+            setSaveMessage('Attendance saved successfully.');
+        } catch (error) {
+            console.error('Failed to save attendance', error);
+            setSaveMessage('Failed to save attendance.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleSaveSession = async () => {
+        if (!session) {
+            return;
+        }
+
+        try {
+            setIsSavingSession(true);
+            setSaveMessage('');
+
+            await axios.post(`${API_BASE}/api/attendance/logs`, {
+                session_id: session.id,
+                subject: session.subject,
+                batch: session.batch,
+                division: session.division,
+                attendance: buildAttendancePayload(attendanceRows)
+            });
+
+            setSaveMessage('Session saved successfully.');
+        } catch (error) {
+            console.error('Failed to save session', error);
+            setSaveMessage('Failed to save session.');
+        } finally {
+            setIsSavingSession(false);
+        }
+    };
+
+    const handleExportCsv = () => {
+        if (!session || attendanceRows.length === 0) {
+            setSaveMessage('No attendance data to export.');
+            return;
+        }
+
+        const headers = ['PRN', 'Name', 'Status', 'Comment'];
+        const rows = attendanceRows.map((row) => [
+            `"${String(row.prn ?? '').replace(/"/g, '""')}"`,
+            `"${String(row.name ?? '').replace(/"/g, '""')}"`,
+            `"${String(row.status ?? '').replace(/"/g, '""')}"`,
+            `"${String(row.comment ?? '').replace(/"/g, '""')}"`
+        ]);
+
+        const csv = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const safeSubject = String(session.subject || 'session').replace(/\s+/g, '_');
+        const safeDivision = String(session.division || 'division').replace(/\s+/g, '_');
+        link.href = url;
+        link.download = `attendance_${safeSubject}_${safeDivision}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        setSaveMessage('CSV exported successfully.');
+    };
+
+    const presentCount = attendanceRows.filter((row) => row.status === 'present').length;
+    const lateCount = attendanceRows.filter((row) => row.status === 'late').length;
+    const absentCount = attendanceRows.filter((row) => row.status === 'absent').length;
+
+    if (!session) {
+        return (
+            <div className="flex bg-campus-bg min-h-screen">
+                <Sidebar />
+                <div className="ml-64 p-8 w-full flex justify-center">
+                    <CreateSession onSessionStart={setSession} />
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="flex bg-campus-bg min-h-screen font-sans text-campus-text transition-colors duration-300">
+        <div className="flex bg-campus-bg min-h-screen text-campus-text">
             <Sidebar />
 
             <div className="ml-64 flex-1 p-8">
-                <div className="flex justify-between items-end mb-8">
+                <div className="flex justify-between mb-8">
                     <div>
-                        <h1 className="text-3xl font-extrabold text-campus-text">Classroom Radar</h1>
-                        <p className="text-campus-secondary">Live BLE Proximity Detection</p>
+                        <h1 className="text-3xl font-bold">Classroom Radar</h1>
+                        <p>{session.subject} • {session.division}</p>
                     </div>
 
                     <div className="flex gap-4 items-center">
-
-                        {/* Save Session Button */}
-                        <button
-                            onClick={handleSaveSession}
-                            className="bg-green-600 text-white px-4 py-3 rounded-2xl shadow-sm hover:bg-green-700 transition-colors flex items-center gap-2 font-bold"
-                        >
-                            <Save size={20} /> Save Session
-                        </button>
-
-                        {/* Export CSV Button */}
-                        <button
-                            onClick={handleExportCSV}
-                            className="bg-campus-primary text-white px-4 py-3 rounded-2xl shadow-sm hover:opacity-90 transition-opacity flex items-center gap-2 font-bold"
-                        >
-                            <Download size={20} /> Export CSV
-                        </button>
-
-                        <div className="bg-campus-card px-6 py-4 rounded-2xl shadow-sm border border-campus-border flex items-center gap-3">
-                            <div className="relative flex h-3 w-3">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                            </div>
-                            <span className="text-sm font-bold text-campus-text">Gateway Active</span>
+                        <div className="bg-campus-card px-4 py-2 rounded-xl">
+                            Gateway Active
                         </div>
 
-                        <div className="bg-campus-card px-8 py-4 rounded-2xl shadow-sm border border-campus-border flex items-center gap-4">
-                            <div className="bg-campus-bg p-3 rounded-full text-campus-text"><Users size={24} /></div>
-                            <div>
-                                <p className="text-xs uppercase font-bold text-campus-secondary">Currently Present</p>
-                                <p className="text-3xl font-bold text-campus-text">{displayStudents.length}</p>
-                            </div>
+                        <div className="bg-campus-card px-4 py-2 rounded-xl">
+                            Present: {presentCount}
                         </div>
+
+                        <button
+                            onClick={async () => {
+                                await axios.post(`${API_BASE}/api/session/stop`);
+                                setSession(null);
+                                setAttendanceRows([]);
+                                setLiveStudents([]);
+                                setSaveMessage('');
+                            }}
+                            className="bg-red-500 px-4 py-2 rounded-xl text-white"
+                        >
+                            Stop
+                        </button>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[600px]">
-                    {/* THE RADAR */}
-                    <div className="bg-campus-card rounded-3xl p-8 shadow-xl border border-campus-border flex flex-col items-center justify-center relative overflow-hidden">
-                        <h2 className="absolute top-6 left-6 font-bold text-campus-text flex items-center gap-2">
-                            <Radio size={20} className="text-campus-primary" /> Scanning Room 104...
-                        </h2>
-
-                        <div className="relative w-64 h-64 flex items-center justify-center mt-8">
-                            <div className="absolute inset-0 border border-campus-primary/20 rounded-full animate-[ping_3s_linear_infinite]"></div>
-                            <div className="absolute inset-4 border border-campus-primary/40 rounded-full animate-[ping_3s_linear_infinite_delay-1s]"></div>
-                            <div className="absolute inset-8 border border-campus-primary/60 rounded-full animate-[ping_3s_linear_infinite_delay-2s]"></div>
-
-                            <div className="relative bg-campus-primary p-6 rounded-full shadow-lg shadow-campus-primary/50">
-                                <Radio size={48} className="text-campus-bg" />
+                <div className="grid grid-cols-3 gap-6 items-start">
+                    <div className="bg-campus-card p-6 rounded-2xl flex flex-col gap-4 h-fit">
+                        <div className="flex items-center justify-center">
+                            <Radio size={60} />
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 text-sm">
+                            <div className="bg-campus-bg rounded-xl px-4 py-3">
+                                <div className="text-campus-secondary">Present</div>
+                                <div className="text-2xl font-bold">{presentCount}</div>
+                            </div>
+                            <div className="bg-campus-bg rounded-xl px-4 py-3">
+                                <div className="text-campus-secondary">Late</div>
+                                <div className="text-2xl font-bold">{lateCount}</div>
+                            </div>
+                            <div className="bg-campus-bg rounded-xl px-4 py-3">
+                                <div className="text-campus-secondary">Absent</div>
+                                <div className="text-2xl font-bold">{absentCount}</div>
+                            </div>
+                            <div className="bg-campus-bg rounded-xl px-4 py-3">
+                                <div className="text-campus-secondary">Live NFC Detections</div>
+                                <div className="text-2xl font-bold">{liveStudents.length}</div>
                             </div>
                         </div>
                     </div>
 
-                    {/* LIVE ENGAGEMENT LIST */}
-                    <div className="lg:col-span-2 bg-campus-card rounded-3xl shadow-sm border border-campus-border flex flex-col overflow-hidden">
+                    <div className="col-span-2 bg-campus-card p-6 rounded-2xl">
+                        <div className="flex justify-between items-start mb-4 gap-4">
+                            <div>
+                                <h2 className="font-bold flex gap-2 items-center">
+                                    <Activity size={18} /> Students
+                                </h2>
+                                <p className="text-sm text-campus-secondary mt-1">
+                                    NFC detections mark students as present automatically unless you manually override them.
+                                </p>
+                            </div>
 
-                        {/* Header with Manual Add Input */}
-                        <div className="p-6 border-b border-campus-border bg-campus-bg/50 flex justify-between items-center">
-                            <h3 className="font-bold flex items-center gap-2 text-campus-text">
-                                <Activity size={18}/> Active Session Logs
-                            </h3>
-
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="text"
-                                    placeholder="Manual Entry..."
-                                    value={manualName}
-                                    onChange={(e) => setManualName(e.target.value)}
-                                    className="bg-campus-bg border border-campus-border text-campus-text text-sm rounded-lg px-3 py-2 outline-none focus:border-campus-primary"
-                                />
+                            <div className="flex gap-2 flex-wrap justify-end">
                                 <button
-                                    onClick={handleManualAdd}
-                                    className="bg-green-100 text-green-700 hover:bg-green-200 border border-green-200 px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1 transition-colors"
+                                    onClick={() => markAll('present')}
+                                    className="bg-green-600 px-4 py-2 rounded-xl text-white text-sm font-semibold"
                                 >
-                                    <UserPlus size={16} /> Mark Present
+                                    Mark all Present
+                                </button>
+                                <button
+                                    onClick={() => markAll('absent')}
+                                    className="bg-red-500 px-4 py-2 rounded-xl text-white text-sm font-semibold"
+                                >
+                                    Mark all Absent
+                                </button>
+                                <button
+                                    onClick={handleExportCsv}
+                                    className="bg-slate-700 px-4 py-2 rounded-xl text-white text-sm font-semibold"
+                                >
+                                    Export CSV
+                                </button>
+                                <button
+                                    onClick={handleSaveSession}
+                                    disabled={isSavingSession}
+                                    className="bg-indigo-600 px-4 py-2 rounded-xl text-white text-sm font-semibold disabled:opacity-60"
+                                >
+                                    {isSavingSession ? 'Saving Session...' : 'Save Session'}
+                                </button>
+                                <button
+                                    onClick={handleSaveAttendance}
+                                    disabled={isSaving}
+                                    className="bg-campus-primary px-4 py-2 rounded-xl text-white text-sm font-semibold flex items-center gap-2 disabled:opacity-60"
+                                >
+                                    <Save size={16} />
+                                    {isSaving ? 'Saving...' : 'Save Attendance'}
                                 </button>
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                            {displayStudents.length === 0 ? (
-                                <div className="h-full flex items-center justify-center text-campus-secondary">
-                                    No students detected in range.
-                                </div>
-                            ) : (
-                                displayStudents.map((data, index) => (
-                                    <div key={index} className="flex items-center justify-between p-4 bg-campus-bg rounded-xl border border-campus-border hover:border-campus-primary transition-all group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-campus-card border border-campus-border flex items-center justify-center text-campus-text font-bold uppercase">
-                                                {data.student_name.charAt(0)}
-                                            </div>
-                                            <div>
-                                                <span className="font-bold text-campus-text block flex items-center gap-2">
-                                                    {data.student_name}
-                                                    {/* Location Tag */}
-                                                    <span className="text-[10px] uppercase bg-campus-primary/10 text-campus-primary px-2 py-0.5 rounded-full">
-                                                        {estimateLocation(data.rssi)}
-                                                    </span>
-                                                </span>
-                                                <span className="text-xs text-campus-secondary font-mono">Signal: {data.rssi} dBm</span>
-                                            </div>
-                                        </div>
+                        {saveMessage ? (
+                            <div className="mb-4 text-sm text-campus-secondary">{saveMessage}</div>
+                        ) : null}
 
-                                        <div className="flex items-center gap-6">
-                                            <div className="text-right hidden sm:block">
-                                                <span className="text-xs text-campus-secondary block uppercase">Engagement</span>
-                                                <span className="font-bold text-campus-primary">{data.engagement_score}%</span>
-                                            </div>
-                                            <span className="px-3 py-1 rounded-lg text-xs font-bold bg-green-100 text-green-700 border border-green-200">
-                                                Inside Room
-                                            </span>
-
-                                            {/* Kick Button (Visible on hover) */}
-                                            <button
-                                                onClick={() => handleKick(data.student_name)}
-                                                className="opacity-0 group-hover:opacity-100 text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all"
-                                                title="Mark Absent / Kick"
+                        {attendanceRows.length === 0 ? (
+                            <div className="bg-campus-bg rounded-xl p-6 text-campus-secondary flex items-center gap-2">
+                                <Users size={18} />
+                                No students found for this class.
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full border-separate border-spacing-y-2">
+                                    <thead>
+                                        <tr className="text-left text-sm text-campus-secondary">
+                                            <th className="px-4 py-2">PRN</th>
+                                            <th className="px-4 py-2">Name</th>
+                                            <th className="px-4 py-2">Attendance Status</th>
+                                            <th className="px-4 py-2">Comment</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {attendanceRows.map((row) => (
+                                            <tr
+                                                key={row.student_id}
+                                                className={`${statusStyles[row.status]} border`}
                                             >
-                                                <X size={18} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
+                                                <td className="px-4 py-4 font-semibold rounded-l-xl">
+                                                    {row.prn}
+                                                </td>
+                                                <td className="px-4 py-4">
+                                                    <div className="font-semibold">{row.name}</div>
+                                                    <span className={`inline-flex mt-2 px-2 py-1 rounded-full text-xs font-semibold capitalize ${statusBadgeStyles[row.status]}`}>
+                                                        {row.status}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-4">
+                                                    <div className="flex gap-4 flex-wrap">
+                                                        {['present', 'late', 'absent'].map((status) => (
+                                                            <label
+                                                                key={`${row.student_id}-${status}`}
+                                                                className="flex items-center gap-2 text-sm cursor-pointer"
+                                                            >
+                                                                <input
+                                                                    type="radio"
+                                                                    name={`attendance-${row.student_id}`}
+                                                                    checked={row.status === status}
+                                                                    onChange={() => handleStatusChange(row.student_id, status)}
+                                                                    className="accent-campus-primary"
+                                                                />
+                                                                <span className="capitalize">{status}</span>
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-4 rounded-r-xl">
+                                                    <input
+                                                        type="text"
+                                                        value={row.comment}
+                                                        onChange={(event) => handleCommentChange(row.student_id, event.target.value)}
+                                                        placeholder="Add comment"
+                                                        className="w-full border border-campus-border bg-white/80 px-3 py-2 rounded-lg text-sm outline-none focus:border-campus-primary"
+                                                    />
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

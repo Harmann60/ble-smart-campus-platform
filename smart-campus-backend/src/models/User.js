@@ -3,14 +3,26 @@ const { sequelize } = require('../config/db');
 
 const User = sequelize.define('User', {
     student_id: {
-    type: DataTypes.INTEGER,
-    primaryKey : true,
-    unique: true,
-    allowNull: true
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        unique: true,
+        allowNull: true
+    },
+    prn: {
+        type: DataTypes.STRING,
+        allowNull: true
     },
     name: {
         type: DataTypes.STRING,
         allowNull: false
+    },
+    batch: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    division: {
+        type: DataTypes.STRING,
+        allowNull: true
     },
     // 👇 ADDED THESE BACK FOR YOUR LOGIN PAGE
     email: {
