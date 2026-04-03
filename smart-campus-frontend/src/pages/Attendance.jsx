@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Sidebar from '../components/Sidebar';
 import { Radio, Users, Activity, Save } from 'lucide-react';
-
 import CreateSession from '../components/CreateSession';
 
 const API_BASE = 'http://localhost:5000';
+
 const statusStyles = {
     present: 'bg-green-100/80 border-green-200',
     late: 'bg-yellow-100/80 border-yellow-200',
@@ -50,11 +50,19 @@ const isDetectedForRow = (row, liveStudent) => {
     return rowPrn.endsWith(liveIdRaw);
 };
 
+const buildAttendancePayload = (rows) =>
+    rows.map((row) => ({
+        student_id: row.student_id,
+        status: row.status,
+        comment: row.comment
+    }));
+
 const Attendance = () => {
     const [session, setSession] = useState(null);
     const [attendanceRows, setAttendanceRows] = useState([]);
     const [liveStudents, setLiveStudents] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
+    const [isSavingSession, setIsSavingSession] = useState(false);
     const [saveMessage, setSaveMessage] = useState('');
 
     useEffect(() => {
@@ -63,19 +71,19 @@ const Attendance = () => {
         }
 
         const fetchRoster = async () => {
-            const res = await axios.get(
-                `${API_BASE}/api/attendance/session/${session.id}/students`
-            );
-            console.log('📚 Raw roster from backend:', res.data);
-setAttendanceRows(normalizeRoster(res.data));
+            try {
+                const res = await axios.get(
+                    `${API_BASE}/api/attendance/session/${session.id}/students`
+                );
+                setAttendanceRows(normalizeRoster(res.data));
+            } catch (error) {
+                console.error('Failed to fetch roster', error);
+            }
         };
 
         fetchRoster();
         return undefined;
     }, [session]);
-    useEffect(() => {
-        console.log('📊 attendanceRows updated:', attendanceRows.map(r => ({ prn: r.prn, status: r.status, manual_override: r.manual_override })));
-    }, [attendanceRows]);
 
     useEffect(() => {
         if (!session) {
@@ -117,21 +125,17 @@ setAttendanceRows(normalizeRoster(res.data));
 
         fetchLiveStudents();
         const intervalId = setInterval(fetchLiveStudents, 2000);
-
         return () => clearInterval(intervalId);
     }, [session]);
 
     useEffect(() => {
         setAttendanceRows((prevRows) =>
             prevRows.map((row) => {
-                const detected = liveStudents.some(
-                    (student) => isDetectedForRow(row, student)
-                );
-
                 if (row.manual_override) {
                     return row;
                 }
 
+                const detected = liveStudents.some((student) => isDetectedForRow(row, student));
                 return {
                     ...row,
                     status: detected ? 'present' : 'absent'
@@ -143,9 +147,7 @@ setAttendanceRows(normalizeRoster(res.data));
     const updateRow = (studentId, updates) => {
         setAttendanceRows((prevRows) =>
             prevRows.map((row) =>
-                row.student_id === studentId
-                    ? { ...row, ...updates }
-                    : row
+                row.student_id === studentId ? { ...row, ...updates } : row
             )
         );
     };
@@ -172,17 +174,17 @@ setAttendanceRows(normalizeRoster(res.data));
     };
 
     const handleSaveAttendance = async () => {
+        if (!session) {
+            return;
+        }
+
         try {
             setIsSaving(true);
             setSaveMessage('');
 
             await axios.post(`${API_BASE}/api/attendance/save`, {
                 session_id: session.id,
-                attendance: attendanceRows.map((row) => ({
-                    student_id: row.student_id,
-                    status: row.status,
-                    comment: row.comment
-                }))
+                attendance: buildAttendancePayload(attendanceRows)
             });
 
             setSaveMessage('Attendance saved successfully.');
@@ -192,6 +194,61 @@ setAttendanceRows(normalizeRoster(res.data));
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleSaveSession = async () => {
+        if (!session) {
+            return;
+        }
+
+        try {
+            setIsSavingSession(true);
+            setSaveMessage('');
+
+            await axios.post(`${API_BASE}/api/attendance/logs`, {
+                session_id: session.id,
+                subject: session.subject,
+                batch: session.batch,
+                division: session.division,
+                attendance: buildAttendancePayload(attendanceRows)
+            });
+
+            setSaveMessage('Session saved successfully.');
+        } catch (error) {
+            console.error('Failed to save session', error);
+            setSaveMessage('Failed to save session.');
+        } finally {
+            setIsSavingSession(false);
+        }
+    };
+
+    const handleExportCsv = () => {
+        if (!session || attendanceRows.length === 0) {
+            setSaveMessage('No attendance data to export.');
+            return;
+        }
+
+        const headers = ['PRN', 'Name', 'Status', 'Comment'];
+        const rows = attendanceRows.map((row) => [
+            `"${String(row.prn ?? '').replace(/"/g, '""')}"`,
+            `"${String(row.name ?? '').replace(/"/g, '""')}"`,
+            `"${String(row.status ?? '').replace(/"/g, '""')}"`,
+            `"${String(row.comment ?? '').replace(/"/g, '""')}"`
+        ]);
+
+        const csv = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const safeSubject = String(session.subject || 'session').replace(/\s+/g, '_');
+        const safeDivision = String(session.division || 'division').replace(/\s+/g, '_');
+        link.href = url;
+        link.download = `attendance_${safeSubject}_${safeDivision}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        setSaveMessage('CSV exported successfully.');
     };
 
     const presentCount = attendanceRows.filter((row) => row.status === 'present').length;
@@ -245,9 +302,10 @@ setAttendanceRows(normalizeRoster(res.data));
                 </div>
 
                 <div className="grid grid-cols-3 gap-6 items-start">
-                    <div className="bg-campus-card p-6 rounded-2xl flex flex-col gap-4 h-fit">                        <div className="flex items-center justify-center">
-                        <Radio size={60} />
-                    </div>
+                    <div className="bg-campus-card p-6 rounded-2xl flex flex-col gap-4 h-fit">
+                        <div className="flex items-center justify-center">
+                            <Radio size={60} />
+                        </div>
                         <div className="grid grid-cols-1 gap-3 text-sm">
                             <div className="bg-campus-bg rounded-xl px-4 py-3">
                                 <div className="text-campus-secondary">Present</div>
@@ -291,6 +349,19 @@ setAttendanceRows(normalizeRoster(res.data));
                                     className="bg-red-500 px-4 py-2 rounded-xl text-white text-sm font-semibold"
                                 >
                                     Mark all Absent
+                                </button>
+                                <button
+                                    onClick={handleExportCsv}
+                                    className="bg-slate-700 px-4 py-2 rounded-xl text-white text-sm font-semibold"
+                                >
+                                    Export CSV
+                                </button>
+                                <button
+                                    onClick={handleSaveSession}
+                                    disabled={isSavingSession}
+                                    className="bg-indigo-600 px-4 py-2 rounded-xl text-white text-sm font-semibold disabled:opacity-60"
+                                >
+                                    {isSavingSession ? 'Saving Session...' : 'Save Session'}
                                 </button>
                                 <button
                                     onClick={handleSaveAttendance}
@@ -380,4 +451,3 @@ setAttendanceRows(normalizeRoster(res.data));
 };
 
 export default Attendance;
-
