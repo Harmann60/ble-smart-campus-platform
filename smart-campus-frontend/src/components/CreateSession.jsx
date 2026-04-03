@@ -16,6 +16,7 @@ export default function CreateSession({ onSessionStart }) {
   const [batch, setBatch] = useState("");
   const [subject, setSubject] = useState("");
   const [division, setDivision] = useState("");
+  const [roomNo, setRoomNo] = useState("");
   const [minTime, setMinTime] = useState(45);
 
   const handleStart = async () => {
@@ -25,6 +26,7 @@ export default function CreateSession({ onSessionStart }) {
       subject,
       batch,
       division,
+      room_no: roomNo,
       start_time: now,
       end_time: now, // optional
       min_attendance_minutes: minTime
@@ -94,6 +96,18 @@ export default function CreateSession({ onSessionStart }) {
             type="time"
             className="w-full p-3 rounded-lg bg-campus-bg border"
             defaultValue={new Date().toTimeString().slice(0,5)}
+          />
+        </div>
+
+        {/* ROOM NO */}
+        <div>
+          <label className="text-sm text-campus-secondary">Room No</label>
+          <input
+            type="text"
+            value={roomNo}
+            onChange={(e) => setRoomNo(e.target.value)}
+            placeholder="e.g. 104"
+            className="w-full p-3 rounded-lg bg-campus-bg border"
           />
         </div>
 

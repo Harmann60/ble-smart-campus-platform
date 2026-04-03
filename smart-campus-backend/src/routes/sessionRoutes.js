@@ -10,6 +10,7 @@ router.post('/start', async (req, res) => {
             subject,
             batch,
             division,
+            room_no,
             start_time,
             end_time,
             min_attendance_minutes
@@ -25,6 +26,7 @@ router.post('/start', async (req, res) => {
             subject,
             batch,
             division,
+            room_no: room_no || null,
             start_time,
             end_time,
             min_attendance_minutes,
@@ -49,7 +51,7 @@ router.get('/active', async (req, res) => {
 // ⛔ STOP SESSION
 router.post('/stop', async (req, res) => {
     await Session.update(
-        { is_active: false },
+        { is_active: false, end_time: new Date() },
         { where: { is_active: true }
     });
 

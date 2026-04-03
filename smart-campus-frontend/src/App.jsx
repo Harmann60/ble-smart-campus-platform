@@ -1,44 +1,29 @@
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Sidebar from './components/Sidebar';
-import Login from './pages/Login';
+
+// Import all of your stunning pages
 import Dashboard from './pages/Dashboard';
-import Canteen from './pages/Canteen';
 import Attendance from './pages/Attendance';
+import AttendanceLogs from './pages/AttendanceLogs';
 import Library from './pages/Library';
-import LibraryLogs from './pages/LibraryLogs'; // 1. IMPORT YOUR NEW PAGE
+import Canteen from './pages/Canteen';
 
 function App() {
-  return (
-    <Router>
-      <Routes>
-        {/* LOGIN: No Sidebar here */}
-        <Route path="/" element={<Login />} />
+    return (
+        <Router>
+            <Routes>
+                {/* Automatically redirect the base URL (/) to the Dashboard */}
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-        {/* PROTECTED ROUTES */}
-        <Route
-          path="/*"
-          element={
-            <div className="flex h-screen bg-gray-50">
-              <Sidebar />
-              <div className="flex-1 overflow-auto">
-                <Routes>
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/canteen" element={<Canteen />} />
-                  <Route path="/attendance" element={<Attendance />} />
-                  <Route path="/library" element={<Library />} />
-                  
-                  {/* 2. ADD THE NEW ROUTE HERE */}
-                  <Route path="/library-logs" element={<LibraryLogs />} />
-                  
-                  <Route path="*" element={<Navigate to="/" />} />
-                </Routes>
-              </div>
-            </div>
-          }
-        />
-      </Routes>
-    </Router>
-  );
+                {/* Your core platform routes */}
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/attendance" element={<Attendance />} />
+                <Route path="/attendance-logs" element={<AttendanceLogs />} />
+                <Route path="/library" element={<Library />} />
+                <Route path="/canteen" element={<Canteen />} />
+            </Routes>
+        </Router>
+    );
 }
 
 export default App;

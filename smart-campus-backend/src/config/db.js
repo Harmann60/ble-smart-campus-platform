@@ -5,9 +5,16 @@ const sequelize = new Sequelize({
     dialect: 'sqlite',
     storage: path.join(__dirname, '../../smart_campus.db'),
     logging: false,
-    // 👇 ADD THIS SECTION
+    pool: {
+        max: 1,
+        min: 0,
+        acquire: 30000,
+        idle: 10000
+    },
+    retry: {
+        max: 5
+    },
     dialectOptions: {
-        // This tells SQLite: "Don't check if role_id exists in another table, just save the data!"
         foreignKeys: false
     }
 });
@@ -15,11 +22,12 @@ const sequelize = new Sequelize({
 const connectDB = async () => {
     try {
         await sequelize.authenticate();
-        // Force foreign keys off for this connection just to be sure
-        await sequelize.query("PRAGMA foreign_keys = OFF;");
-        console.log('✅ Connected to SQLite Database (Foreign Keys Disabled)!');
+        await sequelize.query('PRAGMA foreign_keys = OFF;');
+        await sequelize.query('PRAGMA journal_mode = WAL;');
+        await sequelize.query('PRAGMA busy_timeout = 5000;');
+        console.log('Connected to SQLite Database (Foreign Keys Disabled)!');
     } catch (error) {
-        console.error('❌ Connection failed:', error.message);
+        console.error('Connection failed:', error.message);
     }
 };
 

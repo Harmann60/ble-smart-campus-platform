@@ -1,176 +1,103 @@
-import React, { useState, useRef, useEffect } from 'react';
-import axios from 'axios';
+import React from 'react';
 import Sidebar from '../components/Sidebar';
-import { Book, Clock, ShieldCheck, TrendingUp, ArrowRight } from 'lucide-react';
+import { BookOpen, MapPin, Users, BookMarked, Monitor } from 'lucide-react';
 
 const Library = () => {
-    const [activeStudent, setActiveStudent] = useState(null);
-    const [status, setStatus] = useState('idle');
-    const [message, setMessage] = useState('Scan Student ID');
-    const [scannedId, setScannedId] = useState('');
-    // eslint-disable-next-line no-unused-vars
-    const [logs, setLogs] = useState([]);
-    const searchInputRef = useRef(null);
-
-    // Fetch library-specific logs
-    const fetchLogs = async () => {
-        try {
-            const res = await axios.get('http://localhost:5000/api/library/logs');
-            setLogs(res.data);
-        } catch (err) { console.error(err); }
-    };
-
-    useEffect(() => {
-        fetchLogs();
-        const i = setInterval(fetchLogs, 5000);
-        return () => clearInterval(i);
-    }, []);
-
-    const handleScan = async (e) => {
-        e.preventDefault();
-        const inputUid = scannedId;
-        setScannedId(''); // Clear immediately for next scan
-
-        try {
-            if (!activeStudent) {
-                // STEP 1: Identify Student
-                setStatus('loading');
-                const res = await axios.post('http://localhost:5000/api/nfc/identify', { rfid_uid: inputUid });
-                setActiveStudent(res.data);
-                setMessage("Student Found! Now Scan Book.");
-                setStatus('idle');
-            } else {
-                // STEP 2: Issue/Return Book
-                setStatus('loading');
-                const res = await axios.post('http://localhost:5000/api/library/scan', {
-                    rfid_uid: inputUid,
-                    user_uid: activeStudent.rfid_uid
-                });
-                setMessage(res.data.message);
-                setStatus('success');
-                fetchLogs();
-
-                setTimeout(() => {
-                    setActiveStudent(null);
-                    setMessage('Scan Student ID');
-                    setStatus('idle');
-                }, 3000);
-            }
-        } catch (err) {
-            setMessage(err.response?.data?.message || "Error occurred");
-            setStatus('error');
-            setTimeout(() => setStatus('idle'), 3000);
-        }
-    };
+    // 📍 Updated to match your single-floor, two-area layout
+    const zones = [
+        {
+            name: "Front Student Area",
+            capacity: 60,
+            occupied: 42,
+            status: "Normal",
+            description: "Active collaboration & digital zone"
+        },
+        {
+            name: "Back Student Area",
+            capacity: 40,
+            occupied: 38,
+            status: "Near Full",
+            description: "Quiet study & research zone"
+        },
+    ];
 
     return (
-        <div className="flex bg-campus-bg min-h-screen font-sans text-campus-text transition-colors duration-300" onClick={() => searchInputRef.current.focus()}>
+        <div className="flex bg-campus-bg min-h-screen font-sans text-campus-text transition-colors duration-300">
             <Sidebar />
 
             <div className="ml-64 flex-1 p-8">
-
+                {/* Header */}
                 <div className="flex justify-between items-end mb-8">
                     <div>
-                        <h1 className="text-3xl font-extrabold text-campus-text">Library Desk</h1>
-                        <p className="text-campus-secondary">Dual-Scan Issue & Return System</p>
+                        <h1 className="text-4xl font-black text-campus-text flex items-center gap-3 tracking-tight">
+                            <BookOpen className="text-purple-400" size={36} />
+                            Smart Library
+                        </h1>
+                        <p className="text-campus-secondary mt-1 font-medium italic">Single Floor: Automated Utilization Tracking</p>
                     </div>
-                    {/* Stat Box */}
-                    <div className="bg-campus-card px-8 py-4 rounded-2xl shadow-sm border border-campus-border flex items-center gap-4 transition-colors">
-                        <div className="bg-campus-bg p-3 rounded-full text-campus-text"><TrendingUp size={24} /></div>
-                        <div>
-                            <p className="text-xs uppercase font-bold text-campus-secondary">Active Sessions</p>
-                            <p className="text-3xl font-bold text-campus-text">{activeStudent ? '1' : '0'}</p>
-                        </div>
+                    <div className="bg-[#0f2435] px-6 py-3 rounded-2xl border border-campus-border flex items-center gap-3 font-black text-white shadow-xl">
+                        <Users size={20} className="text-purple-400"/> Total Readers: 80
                     </div>
                 </div>
 
-                <div className="flex gap-8 h-[600px]">
-
-                    {/* 1/3 COLUMN: SCANNER (FIXED VISIBILITY) */}
-                    <div className="w-1/3 flex flex-col">
-                        <div className="bg-campus-card rounded-3xl p-8 shadow-xl border border-campus-border flex-1 flex flex-col items-center justify-center text-center relative overflow-hidden transition-colors">
-
-                            {/* Icon Circle */}
-                            <div className="mb-8 p-6 rounded-full border-4 border-dashed border-campus-border bg-campus-bg animate-pulse">
-                                {activeStudent ?
-                                    <Book size={64} className="text-campus-primary" /> :
-                                    <ShieldCheck size={64} className="text-campus-primary" />
-                                }
+                {/* 📍 Grid updated to 2 columns to represent your specific areas */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+                    {zones.map((zone, idx) => (
+                        <div key={idx} className="bg-[#0f2435] p-8 rounded-[2.5rem] border-2 border-transparent hover:border-purple-500/50 transition-all group shadow-2xl">
+                            <div className="flex justify-between items-start mb-6">
+                                <div className={`p-4 rounded-2xl ${zone.status === 'Near Full' ? 'bg-red-500/10 text-red-500' : 'bg-purple-500/10 text-purple-400'}`}>
+                                    {idx === 0 ? <Monitor size={28} /> : <MapPin size={28} />}
+                                </div>
+                                <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${zone.status === 'Near Full' ? 'border-red-500/50 text-red-500' : 'border-green-500/50 text-green-500'}`}>
+                                    {zone.status}
+                                </span>
                             </div>
 
-                            {/* Text - Now uses campus-text so it adapts to dark/light mode automatically */}
-                            <h2 className="text-2xl font-bold mb-2 text-campus-text">
-                                {activeStudent ? "Scan Book ID" : "Scan Student ID"}
-                            </h2>
-                            <p className="text-campus-secondary mb-4">{message}</p>
+                            <h3 className="font-black text-2xl text-white mb-1 tracking-tight">{zone.name}</h3>
+                            <p className="text-campus-secondary text-sm mb-6">{zone.description}</p>
 
-                            {/* Active Student Badge */}
-                            {activeStudent && (
-                                <div className="flex items-center gap-2 mb-6 bg-campus-bg px-4 py-2 rounded-lg border border-campus-primary/30 shadow-sm">
-                                    <span className="font-bold text-campus-text text-sm">{activeStudent.name}</span>
-                                    <ArrowRight size={14} className="text-campus-primary" />
-                                    <span className="text-xs text-campus-secondary">Student Loaded</span>
-                                </div>
-                            )}
-
-                            <form onSubmit={handleScan} className="w-full">
-                                <input
-                                    ref={searchInputRef}
-                                    type="text"
-                                    value={scannedId}
-                                    onChange={e => setScannedId(e.target.value)}
-                                    placeholder="Waiting..."
-                                    autoFocus
-                                    className="w-full bg-campus-bg text-campus-text text-xl py-4 text-center rounded-xl border border-campus-border outline-none focus:border-campus-primary transition placeholder-campus-secondary"
-                                />
-                            </form>
-
-                            {activeStudent && (
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); setActiveStudent(null); setMessage('Scan Student ID'); }}
-                                    className="mt-6 text-red-400 text-xs hover:text-red-500 font-bold hover:underline transition-colors"
-                                >
-                                    Cancel Transaction
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* 2/3 COLUMN: FINE POLICY */}
-                    <div className="w-2/3 bg-campus-card rounded-3xl shadow-sm border border-campus-border flex flex-col overflow-hidden transition-colors">
-                        <div className="p-6 border-b border-campus-border bg-campus-bg/50 flex justify-between items-center">
-                            <h3 className="font-bold flex items-center gap-2 text-campus-text"><Clock size={18}/> Fine Policy & Rules</h3>
-                            <span className="text-xs font-bold bg-campus-primary text-campus-bg px-3 py-1 rounded-full">Active</span>
-                        </div>
-
-                        <div className="flex-1 p-8 space-y-6">
-                            {/* Green Card - Text colors are hardcoded to dark green so they are readable even in dark mode */}
-                            <div className="flex justify-between items-center p-6 bg-green-100 rounded-2xl border border-green-200">
-                                <div>
-                                    <p className="font-bold text-green-800">Standard Period</p>
-                                    <p className="text-sm text-green-700 font-medium">No charges apply for early returns</p>
-                                </div>
-                                <span className="text-2xl font-black text-green-800">7 Days</span>
+                            <div className="flex items-end gap-2">
+                                <span className="text-4xl font-black text-white">{zone.occupied}</span>
+                                <span className="text-xl font-bold text-campus-secondary mb-1">/ {zone.capacity}</span>
+                                <span className="ml-auto text-xs font-bold text-purple-400 uppercase tracking-tighter">Seats Occupied</span>
                             </div>
 
-                            {/* Yellow Card */}
-                            <div className="flex justify-between items-center p-6 bg-yellow-100 rounded-2xl border border-yellow-200">
-                                <div>
-                                    <p className="font-bold text-yellow-800">Late Return</p>
-                                    <p className="text-sm text-yellow-700 font-medium">Applied from day 8 to 15</p>
-                                </div>
-                                <span className="text-2xl font-black text-yellow-800">₹5 / day</span>
-                            </div>
-
-                            {/* Red Card */}
-                            <div className="flex justify-between items-center p-6 bg-red-100 rounded-2xl border border-red-200">
-                                <div>
-                                    <p className="font-bold text-red-800">Severe Overdue</p>
-                                    <p className="text-sm text-red-700 font-medium">Flat rate + daily charge after 15 days</p>
-                                </div>
-                                <span className="text-2xl font-black text-red-800">₹10 / day</span>
+                            {/* Progress Bar for visual impact */}
+                            <div className="w-full h-2 bg-white/5 rounded-full mt-4 overflow-hidden">
+                                <div
+                                    className={`h-full transition-all duration-1000 ${zone.status === 'Near Full' ? 'bg-red-500' : 'bg-purple-500'}`}
+                                    style={{ width: `${(zone.occupied / zone.capacity) * 100}%` }}
+                                ></div>
                             </div>
                         </div>
+                    ))}
+                </div>
+
+                {/* Active Sessions List */}
+                <div className="bg-[#0f2435] rounded-[3rem] p-8 border border-campus-border shadow-2xl">
+                    <h3 className="font-black text-xl text-white mb-6 flex items-center gap-3 uppercase tracking-widest text-sm">
+                        <BookMarked size={20} className="text-purple-400" /> Live Study Sessions
+                    </h3>
+                    <div className="space-y-4">
+                        {['Ananya Sharma', 'Vikram Singh', 'Rohan Gupta'].map((name, idx) => (
+                            <div key={idx} className="flex justify-between items-center p-5 bg-[#061E29] rounded-[1.5rem] border border-white/5 hover:border-purple-500/30 transition-colors group">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center font-black text-xl border border-purple-500/20">
+                                        {name.charAt(0)}
+                                    </div>
+                                    <div>
+                                        <span className="font-black text-white block">{name}</span>
+                                        <span className="text-[10px] text-campus-secondary uppercase font-bold">Verified via BLE Beacon</span>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <span className="block text-xs font-bold text-purple-400">Session Length</span>
+                                    <span className="text-sm font-mono text-white bg-white/5 px-3 py-1 rounded-lg">
+                                        {Math.floor(Math.random() * 3) + 1}h {Math.floor(Math.random() * 60)}m
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
