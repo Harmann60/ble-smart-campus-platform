@@ -1,38 +1,203 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Sidebar from '../components/Sidebar';
-import { Radio, Users } from 'lucide-react';
+import { Radio, Users, Activity, Save } from 'lucide-react';
 
 import CreateSession from '../components/CreateSession';
-import StudentTable from '../components/StudentTable';
+
+const API_BASE = 'http://localhost:5000';
+const statusStyles = {
+    present: 'bg-green-100/80 border-green-200',
+    late: 'bg-yellow-100/80 border-yellow-200',
+    absent: 'bg-red-100/80 border-red-200'
+};
+
+const statusBadgeStyles = {
+    present: 'bg-green-600 text-white',
+    late: 'bg-yellow-500 text-white',
+    absent: 'bg-red-500 text-white'
+};
+
+const normalizeRoster = (rows) =>
+    rows.map((row) => ({
+        student_id: row.student_id,
+        prn: row.prn,
+        name: row.name,
+        status: row.status || 'absent',
+        comment: row.comment || '',
+        manual_override: row.manual_override || false
+    }));
+
+const isDetectedForRow = (row, liveStudent) => {
+    const liveIdRaw = String(liveStudent?.student_id ?? '').trim();
+    if (!liveIdRaw) {
+        return false;
+    }
+
+    const rowStudentId = String(row.student_id ?? '').trim();
+    const rowPrn = String(row.prn ?? '').trim();
+
+    if (liveIdRaw === rowStudentId || liveIdRaw === rowPrn) {
+        return true;
+    }
+
+    const liveIdNum = Number.parseInt(liveIdRaw, 10);
+    const rowStudentIdNum = Number.parseInt(rowStudentId, 10);
+    if (!Number.isNaN(liveIdNum) && !Number.isNaN(rowStudentIdNum) && liveIdNum === rowStudentIdNum) {
+        return true;
+    }
+
+    return rowPrn.endsWith(liveIdRaw);
+};
 
 const Attendance = () => {
-
     const [session, setSession] = useState(null);
+    const [attendanceRows, setAttendanceRows] = useState([]);
     const [liveStudents, setLiveStudents] = useState([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveMessage, setSaveMessage] = useState('');
 
     useEffect(() => {
-        if (!session) return;
+        if (!session) {
+            return undefined;
+        }
 
-        const fetchLiveAttendance = async () => {
+        const fetchRoster = async () => {
+            const res = await axios.get(
+                `${API_BASE}/api/attendance/session/${session.id}/students`
+            );
+            console.log('📚 Raw roster from backend:', res.data);
+setAttendanceRows(normalizeRoster(res.data));
+        };
+
+        fetchRoster();
+        return undefined;
+    }, [session]);
+    useEffect(() => {
+        console.log('📊 attendanceRows updated:', attendanceRows.map(r => ({ prn: r.prn, status: r.status, manual_override: r.manual_override })));
+    }, [attendanceRows]);
+
+    useEffect(() => {
+        if (!session) {
+            return undefined;
+        }
+
+        setLiveStudents([]);
+
+        const fetchLiveStudents = async () => {
             try {
-                const res = await axios.get(
-                    `http://localhost:5000/api/attendance/${session.id}`
-                );
-                setLiveStudents(res.data);
-            } catch (err) {
-                console.error(err);
+                const [attendanceRes, bleRes] = await Promise.allSettled([
+                    axios.get(`${API_BASE}/api/attendance/live`),
+                    axios.get(`${API_BASE}/api/ble/live-radar`)
+                ]);
+
+                const attendanceData =
+                    attendanceRes.status === 'fulfilled' && Array.isArray(attendanceRes.value?.data?.data)
+                        ? attendanceRes.value.data.data
+                        : [];
+
+                const bleData =
+                    bleRes.status === 'fulfilled' && Array.isArray(bleRes.value?.data)
+                        ? bleRes.value.data
+                        : [];
+
+                const mergedById = new Map();
+                [...attendanceData, ...bleData].forEach((student) => {
+                    const key = String(student?.student_id ?? '').trim();
+                    if (key) {
+                        mergedById.set(key, student);
+                    }
+                });
+
+                setLiveStudents(Array.from(mergedById.values()));
+            } catch (error) {
+                console.error('Failed to fetch live students', error);
             }
         };
 
-        fetchLiveAttendance();
-        const interval = setInterval(fetchLiveAttendance, 2000);
+        fetchLiveStudents();
+        const intervalId = setInterval(fetchLiveStudents, 2000);
 
-        return () => clearInterval(interval);
-
+        return () => clearInterval(intervalId);
     }, [session]);
 
-    // 🔴 NO SESSION SCREEN
+    useEffect(() => {
+        setAttendanceRows((prevRows) =>
+            prevRows.map((row) => {
+                const detected = liveStudents.some(
+                    (student) => isDetectedForRow(row, student)
+                );
+
+                if (row.manual_override) {
+                    return row;
+                }
+
+                return {
+                    ...row,
+                    status: detected ? 'present' : 'absent'
+                };
+            })
+        );
+    }, [liveStudents]);
+
+    const updateRow = (studentId, updates) => {
+        setAttendanceRows((prevRows) =>
+            prevRows.map((row) =>
+                row.student_id === studentId
+                    ? { ...row, ...updates }
+                    : row
+            )
+        );
+    };
+
+    const handleStatusChange = (studentId, status) => {
+        updateRow(studentId, {
+            status,
+            manual_override: true
+        });
+    };
+
+    const handleCommentChange = (studentId, comment) => {
+        updateRow(studentId, { comment });
+    };
+
+    const markAll = (status) => {
+        setAttendanceRows((prevRows) =>
+            prevRows.map((row) => ({
+                ...row,
+                status,
+                manual_override: true
+            }))
+        );
+    };
+
+    const handleSaveAttendance = async () => {
+        try {
+            setIsSaving(true);
+            setSaveMessage('');
+
+            await axios.post(`${API_BASE}/api/attendance/save`, {
+                session_id: session.id,
+                attendance: attendanceRows.map((row) => ({
+                    student_id: row.student_id,
+                    status: row.status,
+                    comment: row.comment
+                }))
+            });
+
+            setSaveMessage('Attendance saved successfully.');
+        } catch (error) {
+            console.error('Failed to save attendance', error);
+            setSaveMessage('Failed to save attendance.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const presentCount = attendanceRows.filter((row) => row.status === 'present').length;
+    const lateCount = attendanceRows.filter((row) => row.status === 'late').length;
+    const absentCount = attendanceRows.filter((row) => row.status === 'absent').length;
+
     if (!session) {
         return (
             <div className="flex bg-campus-bg min-h-screen">
@@ -49,74 +214,165 @@ const Attendance = () => {
             <Sidebar />
 
             <div className="ml-64 flex-1 p-8">
-
-                {/* HEADER */}
-                <div className="flex justify-between items-end mb-8">
+                <div className="flex justify-between mb-8">
                     <div>
-                        <h1 className="text-3xl font-extrabold">Classroom Radar</h1>
-                        <p className="text-campus-secondary">
-                            {session.subject} • {session.class_name}
-                        </p>
+                        <h1 className="text-3xl font-bold">Classroom Radar</h1>
+                        <p>{session.subject} • {session.division}</p>
                     </div>
 
                     <div className="flex gap-4 items-center">
-
-                        {/* Gateway */}
-                        <div className="bg-campus-card px-6 py-4 rounded-2xl border flex items-center gap-3">
-                            <span className="h-3 w-3 bg-green-500 rounded-full animate-pulse"></span>
-                            <span className="text-sm font-bold">Gateway Active</span>
+                        <div className="bg-campus-card px-4 py-2 rounded-xl">
+                            Gateway Active
                         </div>
 
-                        {/* Count */}
-                        <div className="bg-campus-card px-6 py-4 rounded-2xl border flex items-center gap-3">
-                            <Users size={20} />
-                            <div>
-                                <p className="text-xs">Present</p>
-                                <p className="text-xl font-bold">{liveStudents.length}</p>
-                            </div>
+                        <div className="bg-campus-card px-4 py-2 rounded-xl">
+                            Present: {presentCount}
                         </div>
 
-                        {/* STOP */}
                         <button
                             onClick={async () => {
-                                await axios.post('http://localhost:5000/api/session/stop');
+                                await axios.post(`${API_BASE}/api/session/stop`);
                                 setSession(null);
+                                setAttendanceRows([]);
+                                setLiveStudents([]);
+                                setSaveMessage('');
                             }}
-                            className="bg-red-500 px-4 py-2 rounded-lg text-white"
+                            className="bg-red-500 px-4 py-2 rounded-xl text-white"
                         >
                             Stop
                         </button>
-
                     </div>
                 </div>
 
-                {/* GRID */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-                    {/* RADAR */}
-                    <div className="bg-campus-card rounded-3xl p-8 border flex flex-col items-center justify-center relative">
-
-                        <h2 className="absolute top-6 left-6 font-bold flex gap-2">
-                            <Radio size={18} /> Scanning...
-                        </h2>
-
-                        <div className="relative w-64 h-64 flex items-center justify-center">
-
-                            <div className="absolute inset-0 border rounded-full opacity-30"></div>
-                            <div className="absolute inset-6 border rounded-full opacity-40"></div>
-                            <div className="absolute inset-12 border rounded-full opacity-50"></div>
-
-                            <div className="bg-campus-primary p-6 rounded-full">
-                                <Radio size={40} className="text-white" />
+                <div className="grid grid-cols-3 gap-6 items-start">
+                    <div className="bg-campus-card p-6 rounded-2xl flex flex-col gap-4 h-fit">                        <div className="flex items-center justify-center">
+                        <Radio size={60} />
+                    </div>
+                        <div className="grid grid-cols-1 gap-3 text-sm">
+                            <div className="bg-campus-bg rounded-xl px-4 py-3">
+                                <div className="text-campus-secondary">Present</div>
+                                <div className="text-2xl font-bold">{presentCount}</div>
+                            </div>
+                            <div className="bg-campus-bg rounded-xl px-4 py-3">
+                                <div className="text-campus-secondary">Late</div>
+                                <div className="text-2xl font-bold">{lateCount}</div>
+                            </div>
+                            <div className="bg-campus-bg rounded-xl px-4 py-3">
+                                <div className="text-campus-secondary">Absent</div>
+                                <div className="text-2xl font-bold">{absentCount}</div>
+                            </div>
+                            <div className="bg-campus-bg rounded-xl px-4 py-3">
+                                <div className="text-campus-secondary">Live NFC Detections</div>
+                                <div className="text-2xl font-bold">{liveStudents.length}</div>
                             </div>
                         </div>
                     </div>
 
-                    {/* TABLE */}
-                    <div className="lg:col-span-2 bg-campus-card rounded-3xl border flex flex-col">
-                        <StudentTable sessionId={session.id} />
-                    </div>
+                    <div className="col-span-2 bg-campus-card p-6 rounded-2xl">
+                        <div className="flex justify-between items-start mb-4 gap-4">
+                            <div>
+                                <h2 className="font-bold flex gap-2 items-center">
+                                    <Activity size={18} /> Students
+                                </h2>
+                                <p className="text-sm text-campus-secondary mt-1">
+                                    NFC detections mark students as present automatically unless you manually override them.
+                                </p>
+                            </div>
 
+                            <div className="flex gap-2 flex-wrap justify-end">
+                                <button
+                                    onClick={() => markAll('present')}
+                                    className="bg-green-600 px-4 py-2 rounded-xl text-white text-sm font-semibold"
+                                >
+                                    Mark all Present
+                                </button>
+                                <button
+                                    onClick={() => markAll('absent')}
+                                    className="bg-red-500 px-4 py-2 rounded-xl text-white text-sm font-semibold"
+                                >
+                                    Mark all Absent
+                                </button>
+                                <button
+                                    onClick={handleSaveAttendance}
+                                    disabled={isSaving}
+                                    className="bg-campus-primary px-4 py-2 rounded-xl text-white text-sm font-semibold flex items-center gap-2 disabled:opacity-60"
+                                >
+                                    <Save size={16} />
+                                    {isSaving ? 'Saving...' : 'Save Attendance'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {saveMessage ? (
+                            <div className="mb-4 text-sm text-campus-secondary">{saveMessage}</div>
+                        ) : null}
+
+                        {attendanceRows.length === 0 ? (
+                            <div className="bg-campus-bg rounded-xl p-6 text-campus-secondary flex items-center gap-2">
+                                <Users size={18} />
+                                No students found for this class.
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full border-separate border-spacing-y-2">
+                                    <thead>
+                                        <tr className="text-left text-sm text-campus-secondary">
+                                            <th className="px-4 py-2">PRN</th>
+                                            <th className="px-4 py-2">Name</th>
+                                            <th className="px-4 py-2">Attendance Status</th>
+                                            <th className="px-4 py-2">Comment</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {attendanceRows.map((row) => (
+                                            <tr
+                                                key={row.student_id}
+                                                className={`${statusStyles[row.status]} border`}
+                                            >
+                                                <td className="px-4 py-4 font-semibold rounded-l-xl">
+                                                    {row.prn}
+                                                </td>
+                                                <td className="px-4 py-4">
+                                                    <div className="font-semibold">{row.name}</div>
+                                                    <span className={`inline-flex mt-2 px-2 py-1 rounded-full text-xs font-semibold capitalize ${statusBadgeStyles[row.status]}`}>
+                                                        {row.status}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-4">
+                                                    <div className="flex gap-4 flex-wrap">
+                                                        {['present', 'late', 'absent'].map((status) => (
+                                                            <label
+                                                                key={`${row.student_id}-${status}`}
+                                                                className="flex items-center gap-2 text-sm cursor-pointer"
+                                                            >
+                                                                <input
+                                                                    type="radio"
+                                                                    name={`attendance-${row.student_id}`}
+                                                                    checked={row.status === status}
+                                                                    onChange={() => handleStatusChange(row.student_id, status)}
+                                                                    className="accent-campus-primary"
+                                                                />
+                                                                <span className="capitalize">{status}</span>
+                                                            </label>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-4 rounded-r-xl">
+                                                    <input
+                                                        type="text"
+                                                        value={row.comment}
+                                                        onChange={(event) => handleCommentChange(row.student_id, event.target.value)}
+                                                        placeholder="Add comment"
+                                                        className="w-full border border-campus-border bg-white/80 px-3 py-2 rounded-lg text-sm outline-none focus:border-campus-primary"
+                                                    />
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
@@ -124,3 +380,4 @@ const Attendance = () => {
 };
 
 export default Attendance;
+

@@ -131,28 +131,34 @@ router.get('/seed-demo-data', async (req, res) => {
         // Students
         await User.upsert({
             student_id: 1,
+            prn: "240101001",
             name: "Jalaj Maheshwari",
             email: "jalaj@student.com",
             password: pass,
             role: "student",
+            class_name: "CSE A-1",
             engagement_score: 88
         });
 
         await User.upsert({
             student_id: 2,
+            prn: "240101002",
             name: "Harman Jassal",
             email: "harman@student.com",
             password: pass,
             role: "student",
+            class_name: "CSE A-1",
             engagement_score: 92
         });
 
         await User.upsert({
             student_id: 3,
+            prn: "240101003",
             name: "Gauri",
             email: "gauri@student.com",
             password: pass,
             role: "student",
+            class_name: "CSE A-1",
             engagement_score: 95
         });
 

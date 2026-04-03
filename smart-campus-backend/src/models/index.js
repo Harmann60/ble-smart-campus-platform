@@ -9,6 +9,8 @@ const AttendanceLog = require('./AttendanceLog');
 // 👇 DEFINE RELATIONS AFTER ALL MODELS ARE LOADED
 Session.hasMany(AttendanceLog, { foreignKey: 'session_id' });
 AttendanceLog.belongsTo(Session, { foreignKey: 'session_id' });
+User.hasMany(AttendanceLog, { foreignKey: 'student_id', sourceKey: 'student_id' });
+AttendanceLog.belongsTo(User, { foreignKey: 'student_id', targetKey: 'student_id' });
 
 // 👇 DEBUG (VERY IMPORTANT - REMOVE LATER)
 console.log("Loaded Models:", Object.keys(sequelize.models));
