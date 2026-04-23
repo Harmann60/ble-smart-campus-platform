@@ -92,14 +92,11 @@ router.get('/live-radar', (req, res) => {
 
         const data = activeClassroom[id];
 
-        if (currentTime - data.last_seen < 10000) {
-
+        // Change this in bleRoutes.js (Line 56)
+        if (currentTime - data.last_seen < 3600000) { // Keeps them on radar for 1 hour
             liveStudents.push(data);
-
         } else {
-
             delete activeClassroom[id];
-
         }
     }
 

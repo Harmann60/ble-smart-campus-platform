@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Coffee, BookOpen, CalendarDays, LogOut, FileText } from 'lucide-react';
+// 🚀 ADDED 'Trophy' to the lucide-react imports below
+import { LayoutDashboard, Coffee, BookOpen, CalendarDays, LogOut, FileText, Trophy } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 const Sidebar = () => {
@@ -13,6 +14,8 @@ const Sidebar = () => {
         { name: 'Attendance Logs', path: '/attendance-logs', icon: <FileText size={20} /> },
         { name: 'Smart Library', path: '/library', icon: <BookOpen size={20} /> },
         { name: 'Smart Canteen', path: '/canteen', icon: <Coffee size={20} /> },
+        // 🚀 ADDED THE QUIZ ROUTE HERE
+        { name: 'Live Quiz', path: '/quiz', icon: <Trophy size={20} /> },
     ];
 
     const handleLogout = () => {

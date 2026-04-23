@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Dashboard from './pages/Dashboard';
 import Attendance from './pages/Attendance';
 import AttendanceLogs from './pages/AttendanceLogs';
+import QuizDashboard from './pages/QuizDashboard';
 import Library from './pages/Library';
 import Canteen from './pages/Canteen';
 
@@ -21,6 +22,9 @@ function App() {
                 <Route path="/attendance-logs" element={<AttendanceLogs />} />
                 <Route path="/library" element={<Library />} />
                 <Route path="/canteen" element={<Canteen />} />
+
+                {/* 🚀 FIXED: The Quiz now lives at /quiz */}
+                <Route path="/quiz" element={<QuizDashboard />} />
             </Routes>
         </Router>
     );

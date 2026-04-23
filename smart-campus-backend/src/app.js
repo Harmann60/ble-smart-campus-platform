@@ -44,7 +44,17 @@ app.use('/api/attendance', attendanceRoutes);
 
 const PORT = process.env.PORT || 5000;
 
-
+// 🚀 NEW: MOCK QUIZ ROUTE FOR TOMORROW'S DEMO
+app.get('/api/quiz/analytics', (req, res) => {
+    res.json({
+        quizTitle: "Week 4: Advanced JavaScript",
+        classAverage: 82,
+        totalParticipants: 45,
+        hardestQuestion: "What is the Virtual DOM?",
+        accuracyOnHardest: 32,
+        topPerformers: ["Jalaj", "Harman", "Guari"]
+    });
+});
 
 // ======================================================
 // 🚀 CSV BULK IMPORT FUNCTION
