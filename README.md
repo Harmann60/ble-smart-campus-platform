@@ -105,8 +105,7 @@ The platform follows a robust 5-layer architecture:
 ## 👥 Team
 - **Harman** – Backend Engineer
 - **Jalaj** – Product Engineer
-- **Gauri** – Product Designer & Documentation Lead
-
+  
 ---
 
 ## 📜 License
