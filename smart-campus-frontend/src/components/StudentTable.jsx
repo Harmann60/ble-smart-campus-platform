@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import API_BASE from "../api";
 
 export default function StudentTable({ sessionId }) {
   const [students, setStudents] = useState([]);
@@ -8,7 +9,7 @@ export default function StudentTable({ sessionId }) {
     const fetchData = async () => {
       try {
         const res = await axios.get(
-          `http://localhost:5000/api/attendance/${sessionId}`
+          `${API_BASE}/api/attendance/${sessionId}`
         );
         setStudents(res.data);
       } catch (err) {
@@ -23,7 +24,7 @@ export default function StudentTable({ sessionId }) {
   }, [sessionId]);
 
   const markManual = async (student_id) => {
-    await axios.post("http://localhost:5000/api/attendance/manual", {
+    await axios.post(`${API_BASE}/api/attendance/manual`, {
       session_id: sessionId,
       student_id
     });

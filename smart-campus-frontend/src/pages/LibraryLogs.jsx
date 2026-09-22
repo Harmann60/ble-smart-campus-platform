@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import Sidebar from '../components/Sidebar';
 import { Search, CheckCircle } from 'lucide-react';
+import API_BASE from '../api';
 
 const LibraryLogs = () => {
     const [transactions, setTransactions] = useState([]);
@@ -9,7 +10,7 @@ const LibraryLogs = () => {
 
     const fetchLogs = useCallback(() => {
         return axios
-            .get('http://localhost:5000/api/library/transactions')
+            .get(`${API_BASE}/api/library/transactions`)
             .then((res) => {
                 setTransactions(res.data);
             })
@@ -22,7 +23,7 @@ const LibraryLogs = () => {
     const handleClearFine = async (id) => {
         if (!window.confirm("Mark this fine as paid and clear it?")) return;
         try {
-            await axios.post(`http://localhost:5000/api/library/clear-fine/${id}`);
+            await axios.post(`${API_BASE}/api/library/clear-fine/${id}`);
             fetchLogs(); // Refresh logs to show the fine is now 0
         } catch (err) {
             console.error("Error clearing fine:", err);

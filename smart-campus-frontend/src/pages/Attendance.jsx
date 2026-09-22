@@ -3,8 +3,7 @@ import axios from 'axios';
 import Sidebar from '../components/Sidebar';
 import { Radio, Users, Activity, Save } from 'lucide-react';
 import CreateSession from '../components/CreateSession';
-
-const API_BASE = 'http://localhost:5000';
+import API_BASE from '../api';
 
 const statusStyles = {
     present: 'bg-green-100/80 border-green-200',

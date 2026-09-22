@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Sidebar from '../components/Sidebar';
 import { Trophy, Target, Users, Award, BarChart3 } from 'lucide-react';
-
-const API_BASE = 'http://localhost:5000';
+import API_BASE from '../api';
 
 const QuizDashboard = () => {
     const [analytics, setAnalytics] = useState(null);

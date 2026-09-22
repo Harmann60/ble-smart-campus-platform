@@ -1,5 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
+import API_BASE from "../api";
 
 const subjectsByBatch = {
   "2024-28": ["DSA", "DBMS", "OS"],
@@ -22,7 +23,7 @@ export default function CreateSession({ onSessionStart }) {
   const handleStart = async () => {
     const now = new Date();
 
-    const res = await axios.post("http://localhost:5000/api/session/start", {
+    const res = await axios.post(`${API_BASE}/api/session/start`, {
       subject,
       batch,
       division,

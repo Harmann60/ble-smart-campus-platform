@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: smart-campus-backend
+    env: node
+    rootDir: smart-campus-backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: https://your-frontend-domain.vercel.app
+      - key: NODE_ENV
+        value: production
