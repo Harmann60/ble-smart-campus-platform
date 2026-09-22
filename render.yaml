@@ -5,10 +5,13 @@ services:
     rootDir: smart-campus-backend
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
+      - key: NODE_VERSION
+        value: 20.18.1
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN
-        value: https://your-frontend-domain.vercel.app
+        value: https://smart-campus-platform-identa.vercel.app
       - key: NODE_ENV
         value: production

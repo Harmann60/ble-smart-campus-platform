@@ -36,6 +36,11 @@ const corsOptions = process.env.CORS_ORIGIN
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Health check for Render (and load balancers)
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok' });
+});
+
 // --- 3. REGISTER ROUTES ---
 app.use('/api/auth', authRoutes);
 app.use('/api/nfc', nfcRoutes);
