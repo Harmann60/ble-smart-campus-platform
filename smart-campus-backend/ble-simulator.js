@@ -1,13 +1,13 @@
 // ble-simulator.js
-const TARGET_URL = 'http://localhost:5000/api/ble/telemetry';
+const TARGET_URL = process.env.BLE_URL || 'http://localhost:5000/api/ble/telemetry';
 
-// These MAC addresses exactly match the ones we seeded in your database!
+// These student IDs exactly match the ones we seeded with /api/ble/seed-demo-data
 const sampleData = {
     gateway_id: "SIMULATOR_ESP32",
     beacons: [
-        { mac: "AA:BB:CC:11:22:33", rssi: -60 }, // Jalaj Maheshwari
-        { mac: "AA:BB:CC:44:55:66", rssi: -65 }, // Harman Jassal
-        { mac: "AA:BB:CC:77:88:99", rssi: -55 }  // Gauri
+        { student_id: "1", rssi: -60 }, // Jalaj Maheshwari
+        { student_id: "2", rssi: -65 }, // Harman Jassal
+        { student_id: "3", rssi: -55 }  // Gauri
     ]
 };
 
@@ -20,7 +20,7 @@ setInterval(async () => {
         const payload = {
             gateway_id: sampleData.gateway_id,
             beacons: sampleData.beacons.map(b => ({
-                mac: b.mac,
+                student_id: b.student_id,
                 rssi: b.rssi + Math.floor(Math.random() * 10) - 5
             }))
         };

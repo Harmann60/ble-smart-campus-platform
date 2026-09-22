@@ -1,15 +1,14 @@
-import { createContext, useContext, useEffect, useState } from "react";
-
-const ThemeContext = createContext();
+import { useEffect, useState } from 'react';
+import { ThemeContext } from './themeContext';
 
 export const ThemeProvider = ({ children }) => {
     // CHANGED: Default is now 'london' (Dark Mode)
-    const [theme, setTheme] = useState(localStorage.getItem("theme") || "london");
+    const [theme, setTheme] = useState(localStorage.getItem('theme') || 'london');
 
     useEffect(() => {
         const root = window.document.documentElement;
-        root.setAttribute("data-theme", theme);
-        localStorage.setItem("theme", theme);
+        root.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
     }, [theme]);
 
     const changeTheme = (newTheme) => {
@@ -22,5 +21,3 @@ export const ThemeProvider = ({ children }) => {
         </ThemeContext.Provider>
     );
 };
-
-export const useTheme = () => useContext(ThemeContext);

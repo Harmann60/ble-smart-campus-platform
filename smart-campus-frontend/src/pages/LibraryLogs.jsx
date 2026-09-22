@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import Sidebar from '../components/Sidebar';
 import { Search, CheckCircle } from 'lucide-react';
@@ -7,14 +7,16 @@ const LibraryLogs = () => {
     const [transactions, setTransactions] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
 
-    const fetchLogs = async () => {
-        try {
-            const res = await axios.get('http://localhost:5000/api/library/transactions');
-            setTransactions(res.data);
-        } catch (err) {
-            console.error("Fetch error:", err);
-        }
-    };
+    const fetchLogs = useCallback(() => {
+        return axios
+            .get('http://localhost:5000/api/library/transactions')
+            .then((res) => {
+                setTransactions(res.data);
+            })
+            .catch((err) => {
+                console.error('Fetch error:', err);
+            });
+    }, []);
 
     // New Function: Clear fine in database and refresh UI
     const handleClearFine = async (id) => {
@@ -32,7 +34,7 @@ const LibraryLogs = () => {
         fetchLogs();
         const interval = setInterval(fetchLogs, 5000);
         return () => clearInterval(interval);
-    }, []);
+    }, [fetchLogs]);
 
     const filtered = transactions.filter(t =>
         t.user_uid?.toLowerCase().includes(searchTerm.toLowerCase()) ||

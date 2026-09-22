@@ -2,6 +2,18 @@ import React from 'react';
 import Sidebar from '../components/Sidebar';
 import { BookOpen, MapPin, Users, BookMarked, Monitor } from 'lucide-react';
 
+const sessionLengthFor = (name) => {
+    let seed = 0;
+    for (const char of name) {
+        seed = (seed + char.charCodeAt(0)) % 180;
+    }
+
+    const hours = Math.floor(seed / 60) + 1;
+    const minutes = seed % 60;
+
+    return `${hours}h ${minutes}m`;
+};
+
 const Library = () => {
     // 📍 Updated to match your single-floor, two-area layout
     const zones = [
@@ -93,7 +105,7 @@ const Library = () => {
                                 <div className="text-right">
                                     <span className="block text-xs font-bold text-purple-400">Session Length</span>
                                     <span className="text-sm font-mono text-white bg-white/5 px-3 py-1 rounded-lg">
-                                        {Math.floor(Math.random() * 3) + 1}h {Math.floor(Math.random() * 60)}m
+                                        {sessionLengthFor(name)}
                                     </span>
                                 </div>
                             </div>
