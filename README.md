@@ -2,7 +2,6 @@
 
 An IoT-enabled, SaaS-based Smart Campus Platform designed to intelligently manage attendance, canteen payments, library automation, and learning engagement analytics using BLE-based proximity validation and real-time backend processing. 
 
-*Developed as part of Project-Based Learning (PBL).*
 
 ---
 
